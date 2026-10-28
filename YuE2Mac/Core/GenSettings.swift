@@ -94,11 +94,23 @@ final class SettingsStore {
         didSet { defaults.set(proSidebarFraction, forKey: "proSidebarFraction") }
     }
 
+    /// The fraction of the window width that the right-hand library pane
+    /// occupies. Shared by both modes; persisted, double-click resets it.
+    var libraryPaneFraction: Double {
+        didSet { defaults.set(libraryPaneFraction, forKey: "libraryPaneFraction") }
+    }
+
+    /// The library pane's default width and the band its drag-resize is clamped
+    /// to, so the studio on the left stays usable at any window size.
+    static let libraryPaneDefault = 0.32
+    static let libraryPaneRange = 0.25...0.50
+
     /// Keep the split inside a band where both columns stay usable, whatever
     /// the window width or whatever was stored. Never returns NaN/infinite.
-    static func clampSplit(_ f: Double, fallback: Double = 0.40) -> Double {
+    static func clampSplit(_ f: Double, fallback: Double = 0.40,
+                           range: ClosedRange<Double> = 0.25...0.60) -> Double {
         guard f.isFinite else { return fallback }
-        return min(0.60, max(0.25, f))
+        return min(range.upperBound, max(range.lowerBound, f))
     }
 
     // Advanced sampling overrides (Pro mode).
@@ -145,6 +157,9 @@ final class SettingsStore {
             (defaults.object(forKey: "liteSidebarFraction") as? Double) ?? 0.36, fallback: 0.36)
         proSidebarFraction = Self.clampSplit(
             (defaults.object(forKey: "proSidebarFraction") as? Double) ?? 0.40, fallback: 0.40)
+        libraryPaneFraction = Self.clampSplit(
+            (defaults.object(forKey: "libraryPaneFraction") as? Double) ?? Self.libraryPaneDefault,
+            fallback: Self.libraryPaneDefault, range: Self.libraryPaneRange)
 
         let t = SamplingOverrides.engineDefaults
         temperature = defaults.object(forKey: "temperature") == nil ? t.temperature : defaults.double(forKey: "temperature")

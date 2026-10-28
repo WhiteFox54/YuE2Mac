@@ -1,7 +1,8 @@
 //
 //  LibraryView.swift — every song YuE2Mac has made, with its metadata: draft
 //  badges, seeds, durations, replay, M4A export, Finder, retakes, finish and
-//  score editing. (Analysis §2.A.4/5 — ianiv-style library, native.)
+//  score editing. Shown as a resizable right-hand pane (Analysis §2.A.4/5 —
+//  ianiv-style library, native).
 //
 
 import SwiftUI
@@ -9,7 +10,9 @@ import AppKit
 
 struct LibraryView: View {
     @Bindable var engine: GenerationEngine
-    @Environment(\.dismiss) private var dismiss
+    /// Hides the pane (the library is a right-hand pane, not a sheet — there's
+    /// nothing to dismiss). The toolbar button toggles the same state.
+    var onClose: () -> Void
 
     @State private var songs: [LibrarySong] = []
     @State private var query = ""
@@ -40,7 +43,7 @@ struct LibraryView: View {
                 if let note = statusNote {
                     Text(note).font(.system(.caption)).foregroundStyle(.secondary)
                 }
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button("Done") { onClose() }
             }
 
             TextField("Search titles, styles, lyrics…", text: $query)
@@ -61,8 +64,8 @@ struct LibraryView: View {
                 }
             }
         }
-        .padding(20)
-        .frame(minWidth: 680, minHeight: 480)
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: refresh)
         .onChange(of: engine.libraryRevision) { _, _ in refresh() }
         .sheet(item: $editingSong) { song in

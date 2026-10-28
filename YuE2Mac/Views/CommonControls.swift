@@ -160,6 +160,8 @@ struct SplitDivider: View {
     /// The mode's default fraction — used by the double-click reset.
     var defaultFraction: Double
     @Binding var fraction: Double
+    /// The band the drag is clamped to, so both sides stay usable.
+    var range: ClosedRange<Double> = 0.25...0.60
     /// Called once, when the drag ends (or after a double-click reset).
     var onCommit: () -> Void
 
@@ -185,7 +187,8 @@ struct SplitDivider: View {
                         dragStart = start
                         guard totalWidth > 0 else { return }
                         let delta = Double(value.translation.width / totalWidth)
-                        fraction = SettingsStore.clampSplit(start - delta, fallback: defaultFraction)
+                        fraction = SettingsStore.clampSplit(start - delta, fallback: defaultFraction,
+                                                           range: range)
                     }
                     .onEnded { _ in
                         dragging = false

@@ -14,6 +14,8 @@ struct GeneratorView: View {
     @Bindable private var settings = SettingsStore.shared
 
     @State private var showLibrary = false
+    /// The library pane's width as a fraction of the window; draggable, persisted.
+    @State private var libraryFraction = SettingsStore.shared.libraryPaneFraction
     @State private var showSettings = false
     @State private var showAbout = false
     @State private var showLyricComposer = false
@@ -26,20 +28,37 @@ struct GeneratorView: View {
             AmbientThemeBackground(theme: theme).ignoresSafeArea()
 
             GeometryReader { g in
-                Group {
-                    switch settings.mode {
-                    case .lite:
-                        LiteModeView(engine: engine,
-                                     onOpenLibrary: { showLibrary = true },
-                                     onWriteLyrics: { showLyricComposer = true })
-                    case .pro:
-                        ProModeView(engine: engine,
-                                    onOpenLibrary: { showLibrary = true },
-                                    onWriteLyrics: { showLyricComposer = true },
-                                    onEditScore: { song in editingSong = song })
+                let dividerWidth: CGFloat = showLibrary ? 14 : 0   // 14pt = the split divider
+                let usable = max(0, g.size.width - dividerWidth)
+                HStack(alignment: .top, spacing: 0) {
+                    Group {
+                        switch settings.mode {
+                        case .lite:
+                            LiteModeView(engine: engine,
+                                         onOpenLibrary: { showLibrary = true },
+                                         onWriteLyrics: { showLyricComposer = true })
+                        case .pro:
+                            ProModeView(engine: engine,
+                                        onOpenLibrary: { showLibrary = true },
+                                        onWriteLyrics: { showLyricComposer = true },
+                                        onEditScore: { song in editingSong = song })
+                        }
+                    }
+                    .frame(width: usable * (showLibrary ? 1 - libraryFraction : 1),
+                           height: g.size.height)
+
+                    if showLibrary {
+                        SplitDivider(totalWidth: g.size.width,
+                                     defaultFraction: SettingsStore.libraryPaneDefault,
+                                     fraction: $libraryFraction,
+                                     range: SettingsStore.libraryPaneRange,
+                                     onCommit: { settings.libraryPaneFraction = libraryFraction })
+
+                        LibraryView(engine: engine,
+                                    onClose: { showLibrary = false })
+                            .frame(width: usable * libraryFraction, height: g.size.height)
                     }
                 }
-                .frame(width: g.size.width, height: g.size.height)
             }
         }
         .frame(minWidth: 1000, minHeight: 680)
@@ -50,7 +69,7 @@ struct GeneratorView: View {
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { showLibrary.toggle() } label: { Image(systemName: "record.circle") }
-                    .help("Your song library")
+                    .help("Show or hide your song library")
                 themeMenu
                 Button { showAbout.toggle() } label: { Image(systemName: "info.circle") }
                     .help("About YuE2Mac")
@@ -58,9 +77,6 @@ struct GeneratorView: View {
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
                     .help("Engine setup")
             }
-        }
-        .sheet(isPresented: $showLibrary) {
-            LibraryView(engine: engine)
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet(setup: setup)
