@@ -32,9 +32,9 @@ struct SongMetadata: Codable {
     var fullDurationSec: Double?
     var finishedAt: Date?
 
-    // User ratings (persisted across sessions).
-    var liked: Bool = false
-    var disliked: Bool = false
+    // User ratings (persisted across sessions; optional for backward compat).
+    var liked: Bool?
+    var disliked: Bool?
 }
 
 struct LibrarySong: Identifiable {
@@ -80,9 +80,9 @@ struct LibrarySong: Identifiable {
     /// Needs metadata (style/lyrics/seed…) to spin off variations or re-renders.
     var canVary: Bool { metadata != nil && !legacy }
 
-    // User ratings from persisted metadata.
-    var liked: Bool { metadata?.liked ?? false }
-    var disliked: Bool { metadata?.disliked ?? false }
+    // User ratings from persisted metadata (default to false if not set).
+    var liked: Bool { metadata?.liked == true }
+    var disliked: Bool { metadata?.disliked == true }
 
     var duration: Double { SongLibrary.wavDuration(wav) ?? 0 }
     var durationText: String {
@@ -170,7 +170,7 @@ enum SongLibrary {
 
     static func toggleLike(_ song: LibrarySong) {
         guard let folder = song.folder, var meta = loadMetadata(folder: folder) else { return }
-        if meta.liked {
+        if meta.liked == true {
             meta.liked = false
         } else {
             meta.liked = true
@@ -181,7 +181,7 @@ enum SongLibrary {
 
     static func toggleDislike(_ song: LibrarySong) {
         guard let folder = song.folder, var meta = loadMetadata(folder: folder) else { return }
-        if meta.disliked {
+        if meta.disliked == true {
             meta.disliked = false
         } else {
             meta.disliked = true
