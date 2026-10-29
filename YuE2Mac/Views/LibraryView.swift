@@ -8,6 +8,12 @@
 import SwiftUI
 import AppKit
 
+enum RatingFilter: String, CaseIterable {
+    case all = "All"
+    case liked = "Liked"
+    case disliked = "Disliked"
+}
+
 struct LibraryView: View {
     @Bindable var engine: GenerationEngine
     /// Hides the pane (the library is a right-hand pane, not a sheet — there's
@@ -16,6 +22,7 @@ struct LibraryView: View {
 
     @State private var songs: [LibrarySong] = []
     @State private var query = ""
+    @State private var filter: RatingFilter = .all
     @State private var editingSong: LibrarySong?
     @State private var confirmingDelete: LibrarySong?
     @State private var statusNote: String?
@@ -25,11 +32,23 @@ struct LibraryView: View {
 
     private var filtered: [LibrarySong] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return songs }
-        return songs.filter {
-            $0.title.lowercased().contains(q) ||
-            ($0.metadata?.style.lowercased().contains(q) ?? false) ||
-            ($0.metadata?.lyrics.lowercased().contains(q) ?? false)
+        return songs.filter { song in
+            // Apply rating filter first.
+            switch filter {
+            case .all:
+                break
+            case .liked:
+                guard song.liked else { return false }
+            case .disliked:
+                guard song.disliked else { return false }
+            }
+            // Then apply text search.
+            if !q.isEmpty {
+                return song.title.lowercased().contains(q) ||
+                    (song.metadata?.style.lowercased().contains(q) ?? false) ||
+                    (song.metadata?.lyrics.lowercased().contains(q) ?? false)
+            }
+            return true
         }
     }
 
@@ -46,6 +65,19 @@ struct LibraryView: View {
                 Button("Done") { onClose() }
             }
 
+            // Rating filter buttons.
+            HStack(spacing: 8) {
+                ForEach(RatingFilter.allCases, id: \.self) { f in
+                    let isActive = filter == f
+                    Button(f.rawValue) {
+                        filter = f
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(isActive ? theme.accentColor : nil)
+                }
+            }
+
             TextField("Search titles, styles, lyrics…", text: $query)
                 .textFieldStyle(.roundedBorder)
 
@@ -58,7 +90,15 @@ struct LibraryView: View {
                             LibraryRow(engine: engine, song: song, theme: theme,
                                        onEdit: { editingSong = song },
                                        onDelete: { confirmingDelete = song },
-                                       onNote: { statusNote = $0 })
+                                       onNote: { statusNote = $0 },
+                                       onToggleLike: {
+                                           SongLibrary.toggleLike(song)
+                                           refresh()
+                                       },
+                                       onToggleDislike: {
+                                           SongLibrary.toggleDislike(song)
+                                           refresh()
+                                       })
                         }
                     }
                 }
@@ -115,6 +155,8 @@ private struct LibraryRow: View {
     var onEdit: () -> Void
     var onDelete: () -> Void
     var onNote: (String) -> Void
+    var onToggleLike: () -> Void
+    var onToggleDislike: () -> Void
 
     var body: some View {
         CardContainer(theme: theme) {
@@ -131,6 +173,21 @@ private struct LibraryRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 AudioPlayer(url: song.wav)
+
+                // Like / Dislike buttons.
+                Button(action: onToggleLike) {
+                    Image(systemName: song.liked ? "hand.thumbsup.fill" : "hand.thumbsup")
+                        .foregroundStyle(song.liked ? theme.accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Like this song")
+
+                Button(action: onToggleDislike) {
+                    Image(systemName: song.disliked ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                        .foregroundStyle(song.disliked ? theme.accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Dislike this song")
 
                 Menu {
                     if song.canFinish {

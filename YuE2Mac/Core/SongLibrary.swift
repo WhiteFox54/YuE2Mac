@@ -31,6 +31,10 @@ struct SongMetadata: Codable {
     var fullSteps: Int?
     var fullDurationSec: Double?
     var finishedAt: Date?
+
+    // User ratings (persisted across sessions).
+    var liked: Bool = false
+    var disliked: Bool = false
 }
 
 struct LibrarySong: Identifiable {
@@ -75,6 +79,10 @@ struct LibrarySong: Identifiable {
     var canFinish: Bool { isDraft && hasTokens }
     /// Needs metadata (style/lyrics/seed…) to spin off variations or re-renders.
     var canVary: Bool { metadata != nil && !legacy }
+
+    // User ratings from persisted metadata.
+    var liked: Bool { metadata?.liked ?? false }
+    var disliked: Bool { metadata?.disliked ?? false }
 
     var duration: Double { SongLibrary.wavDuration(wav) ?? 0 }
     var durationText: String {
@@ -156,6 +164,30 @@ enum SongLibrary {
         if let data = try? encoder.encode(metadata) {
             try? data.write(to: folder.appendingPathComponent(songJSONName), options: .atomic)
         }
+    }
+
+    // MARK: Like / Dislike
+
+    static func toggleLike(_ song: LibrarySong) {
+        guard let folder = song.folder, var meta = loadMetadata(folder: folder) else { return }
+        if meta.liked {
+            meta.liked = false
+        } else {
+            meta.liked = true
+            meta.disliked = false   // mutually exclusive
+        }
+        writeMetadata(meta, folder: folder)
+    }
+
+    static func toggleDislike(_ song: LibrarySong) {
+        guard let folder = song.folder, var meta = loadMetadata(folder: folder) else { return }
+        if meta.disliked {
+            meta.disliked = false
+        } else {
+            meta.disliked = true
+            meta.liked = false     // mutually exclusive
+        }
+        writeMetadata(meta, folder: folder)
     }
 
     // MARK: Export (native, no dependencies — afconvert ships with macOS)
