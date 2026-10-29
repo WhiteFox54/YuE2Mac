@@ -50,13 +50,13 @@ struct ProModeView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        generateCard
                         if !engine.jobs.isEmpty { queueCard }
                         modelCard
                         qualityCard
                         samplingCard
                         lengthCard
                         seedCard
+                        generateCard
                     }
                     .padding(16)
                 }

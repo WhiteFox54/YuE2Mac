@@ -147,7 +147,9 @@ private struct LibraryRow: View {
                         }
                         if let abc = song.abcURL {
                             Divider()
-                            Button { NSWorkspace.shared.open(abc) } label: {
+                            Button {
+                                NSWorkspace.shared.openFile(abc.path, withApplication: "TextEdit")
+                            } label: {
                                 Label("Open ABC file", systemImage: "doc.plaintext")
                             }
                         }

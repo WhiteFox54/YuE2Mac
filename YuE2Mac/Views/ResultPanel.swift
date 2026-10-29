@@ -94,9 +94,34 @@ struct ResultPanel: View {
             } else {
                 ProgressView().progressViewStyle(.linear)
             }
-            if !job.detail.isEmpty {
-                Text(job.detail).font(.system(.footnote, design: .monospaced)).foregroundStyle(.tertiary)
+            HStack(spacing: 12) {
+                if !job.detail.isEmpty {
+                    Text(job.detail).font(.system(.footnote, design: .monospaced)).foregroundStyle(.tertiary)
+                }
+                Spacer()
+                if let eta = estimatedTimeRemaining(for: job) {
+                    Label(eta, systemImage: "clock")
+                        .font(.system(.caption2, weight: .medium))
+                        .foregroundStyle(theme.accentColor)
+                }
             }
+        }
+    }
+
+    /// Estimate time remaining based on elapsed time and progress.
+    private func estimatedTimeRemaining(for job: GenerationEngine.Job) -> String? {
+        guard let started = job.startedAt, let progress = job.progress, progress > 0.05 else { return nil }
+        let elapsed = Date().timeIntervalSince(started)
+        // Avoid division by very small progress values (unreliable early on).
+        guard progress < 0.98 else { return "almost done" }
+        let estimatedTotal = elapsed / progress
+        let remaining = max(0, estimatedTotal - elapsed)
+        if remaining > 3600 {
+            return String(format: "%d min", Int(remaining) / 60)
+        } else if remaining > 120 {
+            return String(format: "%d min %ds", Int(remaining) / 60, Int(remaining) % 60)
+        } else {
+            return String(format: "%ds", Int(remaining))
         }
     }
 
@@ -152,7 +177,9 @@ struct ResultPanel: View {
                 .help("Reuses this take's notes and seed; refines it with 32 steps instead of the draft's 8.")
             }
             if let abc = song.abcURL {
-                Button { NSWorkspace.shared.open(abc) } label: {
+                Button {
+                    NSWorkspace.shared.openFile(abc.path, withApplication: "TextEdit")
+                } label: {
                     Label("ABC score", systemImage: "doc.plaintext")
                 }
                 .buttonStyle(.bordered).controlSize(.small)

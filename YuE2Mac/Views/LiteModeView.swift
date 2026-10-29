@@ -48,10 +48,10 @@ struct LiteModeView: View {
                              onCommit: { settings.liteSidebarFraction = sidebarFraction })
 
                 VStack(alignment: .leading, spacing: 12) {
-                    generateCard
                     optionsCard
                     tipsCard
                     Spacer()
+                    generateCard
                 }
                 .padding(16)
                 .frame(width: usable * sidebarFraction, height: g.size.height)
