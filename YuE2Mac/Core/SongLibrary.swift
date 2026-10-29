@@ -1,5 +1,5 @@
 //
-//  SongLibrary.swift — every song lives in its own timestamped folder under
+//  SongLibrary.swift — every song lives in its own named folder under
 //  Output/ with a song.json sidecar (style, lyrics, seed, mode, timings…).
 //  The library scans those folders plus legacy loose .wav files, and provides
 //  playback targets, M4A export via afconvert, and delete. (Analysis §2.A.4.)
@@ -200,8 +200,9 @@ enum SongLibrary {
         guard fm.fileExists(atPath: wav.path) || fm.fileExists(atPath: full.path) else { return nil }
 
         let metadata = loadMetadata(folder: folder)
-        let title = metadata?.title
-            ?? folder.lastPathComponent.components(separatedBy: " ").dropFirst().joined(separator: " ")
+        // Folder names are now just the song title (no timestamp prefix).
+        // Use the full folder name as the title when no metadata exists.
+        let title = metadata?.title ?? folder.lastPathComponent
         let created = metadata?.createdAt ?? (modificationDate(of: wav) ?? Date())
 
         return LibrarySong(

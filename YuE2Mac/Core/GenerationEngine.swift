@@ -6,7 +6,7 @@
 //  Queue semantics (analysis §2.A.2/6/7): one job runs at a time, queued jobs
 //  cancel instantly, a running job stops at the next step and is honestly
 //  labelled "Stopped" (never "Failed"). Every song lands in its own
-//  timestamped Output folder with a song.json sidecar.
+//  named Output folder with a song.json sidecar.
 //
 
 import Foundation
@@ -536,11 +536,6 @@ final class GenerationEngine {
     }
 
     private func newSongFolder(named raw: String) -> URL {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let stamp = formatter.string(from: Date())
-
         let invalid = CharacterSet(charactersIn: "/\\:?*\"<>|")
         let safe = raw.unicodeScalars
             .map { invalid.contains($0) ? " " : Character($0) }
@@ -551,11 +546,11 @@ final class GenerationEngine {
         if name.isEmpty { name = "Song" }
 
         let outputDir = URL(fileURLWithPath: SettingsStore.shared.outputDirectory)
-        var candidate = outputDir.appendingPathComponent("\(stamp) \(name)")
+        var candidate = outputDir.appendingPathComponent(name)
         var counter = 2
         let fm = FileManager.default
         while fm.fileExists(atPath: candidate.path) {
-            candidate = outputDir.appendingPathComponent("\(stamp) \(name) \(counter)")
+            candidate = outputDir.appendingPathComponent("\(name) \(counter)")
             counter += 1
         }
         try? fm.createDirectory(at: candidate, withIntermediateDirectories: true)
