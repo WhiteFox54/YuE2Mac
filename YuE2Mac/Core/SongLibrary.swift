@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import Combine
 
 /// Metadata written next to each generated song (song.json).
 struct SongMetadata: Codable {
@@ -88,6 +89,74 @@ struct LibrarySong: Identifiable {
     var durationText: String {
         let d = Int(duration)
         return String(format: "%d:%02d", d / 60, d % 60)
+    }
+}
+
+// MARK: - Playlist Manager
+
+@MainActor
+final class PlaylistManager: ObservableObject {
+    static let shared = PlaylistManager()
+
+    /// Songs in the playlist, in playback order.
+    @Published var tracks: [URL] = []
+    /// Index of the currently playing track (-1 if none).
+    @Published var currentIndex: Int = -1
+
+    private init() {}
+
+    /// Add a song to the end of the playlist.
+    func add(_ url: URL) {
+        guard !tracks.contains(url) else { return }
+        tracks.append(url)
+    }
+
+    /// Remove a song from the playlist.
+    func remove(_ url: URL) {
+        let idx = tracks.firstIndex(of: url)
+        if let idx {
+            tracks.remove(at: idx)
+            // Adjust current index if needed.
+            if currentIndex >= tracks.count {
+                currentIndex = -1
+            } else if idx < currentIndex {
+                currentIndex -= 1
+            }
+        }
+    }
+
+    /// Move a track from one position to another within the playlist.
+    func move(from: Int, to: Int) {
+        guard from != to && from >= 0 && from < tracks.count && to >= 0 && to <= tracks.count else { return }
+        let url = tracks.remove(at: from)
+        tracks.insert(url, at: min(to, tracks.count))
+        // Adjust current index.
+        if currentIndex == from {
+            currentIndex = to
+        } else if from < currentIndex && to > currentIndex {
+            currentIndex -= 1
+        } else if from > currentIndex && to <= currentIndex {
+            currentIndex += 1
+        }
+    }
+
+    /// Clear the playlist.
+    func clear() {
+        tracks.removeAll()
+        currentIndex = -1
+    }
+
+    /// Play the next track in the playlist after the current one finishes.
+    func playNext() -> URL? {
+        guard currentIndex < tracks.count - 1 else { return nil }
+        currentIndex += 1
+        return tracks[currentIndex]
+    }
+
+    /// Get the URL of the currently playing track.
+    var currentTrack: URL? {
+        guard currentIndex >= 0 && currentIndex < tracks.count else { return nil }
+        return tracks[currentIndex]
     }
 }
 

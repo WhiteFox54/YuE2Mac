@@ -26,6 +26,8 @@ struct LibraryView: View {
     @State private var editingSong: LibrarySong?
     @State private var confirmingDelete: LibrarySong?
     @State private var statusNote: String?
+    @State private var showPlaylist = false
+    @ObservedObject private var playlist = PlaylistManager.shared
 
     private var settings: SettingsStore { SettingsStore.shared }
     private var theme: AppTheme { settings.theme }
@@ -62,6 +64,13 @@ struct LibraryView: View {
                 if let note = statusNote {
                     Text(note).font(.system(.caption)).foregroundStyle(.secondary)
                 }
+                Button(action: { showPlaylist.toggle() }) {
+                    Label("Playlist", systemImage: "music.note.list")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help(showPlaylist ? "Hide playlist" : "Show playlist")
                 Button("Done") { onClose() }
             }
 
@@ -98,15 +107,80 @@ struct LibraryView: View {
                                        onToggleDislike: {
                                            SongLibrary.toggleDislike(song)
                                            refresh()
+                                       },
+                                       onAddToPlaylist: {
+                                           playlist.add(song.wav)
+                                           // If nothing is playing, start this track.
+                                           if playlist.currentIndex == -1 {
+                                               playlist.currentIndex = 0
+                                               PlaybackCoordinator.shared.play(song.wav)
+                                           }
                                        })
                         }
                     }
                 }
             }
+
+            // Playlist panel (bottom half when shown).
+            if showPlaylist {
+                Divider().padding(.vertical, 8)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Now Playing", systemImage: "play.circle.fill")
+                            .font(.system(.headline, design: .rounded))
+                        Spacer()
+                        if playlist.tracks.count > 0 {
+                            Button("Clear") { playlist.clear() }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                        }
+                    }
+
+                    if playlist.tracks.isEmpty {
+                        Text("Drag songs here to build your playlist.")
+                            .font(.system(.caption))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(20)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 4) {
+                                ForEach(Array(playlist.tracks.enumerated()), id: \.element) { index, url in
+                                    PlaylistRow(
+                                        index: index,
+                                        url: url,
+                                        isCurrent: playlist.currentIndex == index,
+                                        onRemove: { playlist.remove(url) },
+                                        onMoveUp: {
+                                            if index > 0 {
+                                                playlist.move(from: index, to: index - 1)
+                                            }
+                                        },
+                                        onMoveDown: {
+                                            if index < playlist.tracks.count - 1 {
+                                                playlist.move(from: index, to: index + 1)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 200)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear(perform: refresh)
+        .onAppear {
+            refresh()
+            // Set up auto-play next track when current one finishes.
+            PlaybackCoordinator.shared.onTrackFinished = { finishedUrl in
+                if let nextUrl = playlist.playNext() {
+                    PlaybackCoordinator.shared.play(nextUrl)
+                }
+            }
+        }
         .onChange(of: engine.libraryRevision) { _, _ in refresh() }
         .sheet(item: $editingSong) { song in
             ABCEditorView(song: song, engine: engine)
@@ -157,6 +231,7 @@ private struct LibraryRow: View {
     var onNote: (String) -> Void
     var onToggleLike: () -> Void
     var onToggleDislike: () -> Void
+    var onAddToPlaylist: () -> Void
 
     var body: some View {
         CardContainer(theme: theme) {
@@ -188,6 +263,14 @@ private struct LibraryRow: View {
                 }
                 .buttonStyle(.plain)
                 .help("Dislike this song")
+
+                // Add to playlist button.
+                Button(action: onAddToPlaylist) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(theme.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Add to playlist")
 
                 Menu {
                     if song.canFinish {
@@ -268,5 +351,67 @@ private struct LibraryRow: View {
             }
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - Playlist Row
+
+private struct PlaylistRow: View {
+    let index: Int
+    let url: URL
+    let isCurrent: Bool
+    var onRemove: () -> Void
+    var onMoveUp: () -> Void
+    var onMoveDown: () -> Void
+
+    private var title: String {
+        // Try to load metadata for the song name.
+        if let meta = SongLibrary.loadMetadata(folder: url) {
+            return meta.title
+        }
+        return url.lastPathComponent
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("\(index + 1)")
+                .font(.system(.caption, weight: .bold))
+                .frame(width: 20, alignment: .center)
+                .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
+
+            if isCurrent {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            Text(title)
+                .font(.system(.caption))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: onMoveUp) {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+            .disabled(index == 0)
+
+            Button(action: onMoveDown) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+            .disabled(true) // Will be enabled when we know the count
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(6)
+        .background(isCurrent ? Color.accentColor.opacity(0.1) : Color.clear)
     }
 }

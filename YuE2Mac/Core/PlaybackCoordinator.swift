@@ -31,6 +31,9 @@ final class PlaybackCoordinator: ObservableObject {
     /// How many live AudioPlayer views are showing each URL.
     private var liveViews: [URL: Int] = [:]
 
+    /// Called when the current track finishes playing (reaches end).
+    @Published var onTrackFinished: ((URL) -> Void)?
+
     private init() {}
 
     // MARK: - View lifecycle
@@ -122,6 +125,10 @@ final class PlaybackCoordinator: ObservableObject {
                     self.isPlaying = false
                     p.currentTime = 0
                     self.current = 0
+                    // Notify listeners that this track finished.
+                    if let url = self.url {
+                        self.onTrackFinished?(url)
+                    }
                 }
             }
         }
