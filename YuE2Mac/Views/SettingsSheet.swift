@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct SettingsSheet: View {
     let setup: SetupManager
@@ -49,6 +50,22 @@ struct SettingsSheet: View {
                 }
             }
 
+            GroupBox(label: Label("Save location", systemImage: "folder")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(settings.outputDirectory)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button("Choose…") { pickOutputFolder() }
+                    }
+                    Text("Songs and their files will be saved here.")
+                        .font(.system(.caption)).foregroundStyle(.secondary)
+                }
+            }
+
             if setup.state == .failed, let msg = setup.errorMessage {
                 Text(msg).font(.system(.caption)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
             }
@@ -71,6 +88,20 @@ struct SettingsSheet: View {
             Text(label).font(.system(.caption2)).foregroundStyle(.secondary)
             Text(value).font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary).truncationMode(.middle).lineLimit(1)
+        }
+    }
+
+    private func pickOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose where to save generated songs"
+        panel.directoryURL = URL(fileURLWithPath: settings.outputDirectory)
+
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.outputDirectory = url.path
         }
     }
 }

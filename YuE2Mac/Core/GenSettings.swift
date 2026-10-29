@@ -192,4 +192,10 @@ final class SettingsStore {
         if let n = Int(trimmed) { return n }
         return Int.random(in: 0...999_999)
     }
+
+    /// Where generated songs are saved. Defaults to the app's Output folder.
+    var outputDirectory: String {
+        get { defaults.string(forKey: "outputDirectory") ?? AppPaths.outputDir.path }
+        set { defaults.set(newValue, forKey: "outputDirectory") }
+    }
 }

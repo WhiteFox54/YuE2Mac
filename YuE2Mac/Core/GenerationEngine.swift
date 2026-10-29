@@ -550,11 +550,12 @@ final class GenerationEngine {
         if name.count > 40 { name = String(name.prefix(40)) }
         if name.isEmpty { name = "Song" }
 
-        var candidate = AppPaths.outputDir.appendingPathComponent("\(stamp) \(name)")
+        let outputDir = URL(fileURLWithPath: SettingsStore.shared.outputDirectory)
+        var candidate = outputDir.appendingPathComponent("\(stamp) \(name)")
         var counter = 2
         let fm = FileManager.default
         while fm.fileExists(atPath: candidate.path) {
-            candidate = AppPaths.outputDir.appendingPathComponent("\(stamp) \(name) \(counter)")
+            candidate = outputDir.appendingPathComponent("\(stamp) \(name) \(counter)")
             counter += 1
         }
         try? fm.createDirectory(at: candidate, withIntermediateDirectories: true)

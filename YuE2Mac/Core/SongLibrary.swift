@@ -92,9 +92,12 @@ enum SongLibrary {
         let fm = FileManager.default
         var songs: [LibrarySong] = []
 
+        // Use the user's configured output directory (or default).
+        let outputDir = URL(fileURLWithPath: SettingsStore.shared.outputDirectory)
+
         // Modern: one folder per song.
         if let folders = try? fm.contentsOfDirectory(
-            at: AppPaths.outputDir, includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
+            at: outputDir, includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
             options: [.skipsHiddenFiles]) {
             for dir in folders where dir.hasDirectoryPath {
                 if let song = song(inFolder: dir) { songs.append(song) }
@@ -103,7 +106,7 @@ enum SongLibrary {
 
         // Legacy: loose .wav files the old app left directly in Output/.
         if let files = try? fm.contentsOfDirectory(
-            at: AppPaths.outputDir, includingPropertiesForKeys: [.contentModificationDateKey],
+            at: outputDir, includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles]) {
             for file in files where file.pathExtension.lowercased() == "wav" {
                 songs.append(legacySong(file: file))
