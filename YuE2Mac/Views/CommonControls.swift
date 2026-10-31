@@ -139,7 +139,7 @@ struct StageChips: View {
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .background(
                     state == 1 ? theme.accentColor.opacity(0.22)
-                    : Color.white.opacity(state == 0 ? 0.06 : 0.03),
+                    : Color.primary.opacity(state == 0 ? 0.06 : 0.03),
                     in: Capsule()
                 )
                 .foregroundStyle(state == 2 ? Color.secondary.opacity(0.6) : state == 1 ? theme.accentColor : Color.secondary)
@@ -172,8 +172,8 @@ struct SplitDivider: View {
     var body: some View {
         Capsule()
             .fill(hovering || dragging
-                  ? Color.white.opacity(0.45)
-                  : Color.white.opacity(0.14))
+                  ? Color.primary.opacity(0.45)
+                  : Color.primary.opacity(0.14))
             .frame(width: 2)
             .frame(maxHeight: .infinity)
             .frame(width: 14)   // generous, mostly invisible hit area
@@ -221,8 +221,10 @@ struct ChipBadge: View {
 }
 
 extension View {
-    func fieldLook(fill: Color = Color(red: 1.0, green: 1.0, blue: 1.0, opacity: 0.05),
-                   border: Color = Color(red: 1.0, green: 1.0, blue: 1.0, opacity: 0.10)) -> some View {
+    // `.primary` resolves to white in the forced-dark studio themes and black
+    // in system light mode, so every field adapts without per-call-site changes.
+    func fieldLook(fill: Color = Color.primary.opacity(0.05),
+                   border: Color = Color.primary.opacity(0.10)) -> some View {
         self
             .padding(10)
             .background(fill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

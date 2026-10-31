@@ -5,23 +5,45 @@
 
 import SwiftUI
 
-/// App theme. `isTrueDark` drives whether cards use a solid fill (dark) or
-/// translucent material (light).
+/// App theme. The three "studio" themes are custom dark looks; `.system`
+/// uses standard macOS system colors and follows the user's light/dark
+/// appearance.
 enum AppTheme: String, CaseIterable, Identifiable {
     case studio = "Studio"        // default: dark, warm
     case stage = "Stage"          // deep electric blue
     case vinyl = "Vinyl"          // warm amber / tan
+    case system = "System"        // standard macOS colors, follows light/dark
 
     var id: String { rawValue }
     var displayName: String { rawValue }
 
-    var isTrueDark: Bool { true }   // every theme here is a dark, studio look
+    /// The custom themes are designed dark; the system theme follows the user's appearance.
+    var isTrueDark: Bool { self != .system }
+
+    /// Color scheme to force on the window. `nil` = follow the system appearance.
+    /// The custom themes hardcode near-black backgrounds, so they must stay dark;
+    /// only the system theme adapts.
+    var colorScheme: ColorScheme? { self == .system ? nil : .dark }
+
+    /// Card fill. The system theme uses the standard control background so cards
+    /// read as native in both appearances.
+    var cardFill: Color {
+        self == .system ? Color(nsColor: .controlBackgroundColor)
+                        : Color(red: 0.09, green: 0.09, blue: 0.10)
+    }
+
+    /// Ambient background base color (under the glow gradients).
+    var backgroundColor: Color {
+        self == .system ? Color(nsColor: .windowBackgroundColor)
+                        : Color(red: 0.05, green: 0.05, blue: 0.05)
+    }
 
     var accentColor: Color {
         switch self {
         case .studio: return Color(red: 0.94, green: 0.55, blue: 0.30)      // warm amber
         case .stage:  return Color(red: 0.30, green: 0.55, blue: 0.97)      // electric blue
         case .vinyl:  return Color(red: 0.30, green: 0.72, blue: 0.54)      // jade green
+        case .system: return Color.accentColor                               // macOS accent color
         }
     }
 
@@ -51,6 +73,8 @@ enum AppTheme: String, CaseIterable, Identifiable {
                 diffuseWash: [.clear, Color(red: 0.15, green: 0.45, blue: 0.35).opacity(0.12)],
                 animationSpeed: 175
             )
+        case .system:
+            return nil   // no ambient glow — plain system window background
         }
     }
 }
@@ -76,11 +100,13 @@ struct CardContainer<Content: View>: View {
         content()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(fillColor ?? Color(red: 0.09, green: 0.09, blue: 0.10))
+                    .fill(fillColor ?? theme.cardFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(theme.isTrueDark ? Color.white.opacity(0.08) : Color.white.opacity(0.08), lineWidth: 1)
+                    // `.primary` is white in the forced-dark studio themes and
+                    // black in system light mode, so the border adapts for free.
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             )
     }
 }
@@ -95,8 +121,9 @@ struct AmbientThemeBackground: View {
 
     var body: some View {
         ZStack {
-            // Solid dark base, then soft color glows on top for each theme.
-            Color(red: 0.05, green: 0.05, blue: 0.05).ignoresSafeArea()
+            // Base color (dark for the studio themes, standard window background
+            // for system), then soft color glows on top where the theme has a palette.
+            theme.backgroundColor.ignoresSafeArea()
             if let palette = theme.palette {
                 RadialGradient(gradient: Gradient(colors: palette.centerDark), center: .center, startRadius: 0, endRadius: 260)
                 RadialGradient(gradient: Gradient(colors: palette.primaryGlow),

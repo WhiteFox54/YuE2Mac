@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 struct ProModeView: View {
     @Bindable var engine: GenerationEngine
@@ -302,7 +303,7 @@ struct ProModeView: View {
             VStack(alignment: .leading, spacing: 10) {
                 DisclosureGroup(isExpanded: $showAdvanced) {
                     VStack(alignment: .leading, spacing: 10) {
-                        labeledSlider("Temperature", $settings.temperature, 0.1...1.5, whole: false, theme: theme, step: 0.05,
+                        labeledSlider("Creativity", $settings.temperature, 0.1...1.5, whole: false, theme: theme, step: 0.05,
                                       help: "Higher = wilder note choices. 1.0 is the model default.")
                         labeledSlider("Top-p", $settings.topP, 0.5...1.0, whole: false, theme: theme, step: 0.01,
                                       help: "Nucleus sampling cut-off. 0.95 is the model default.")
@@ -358,7 +359,7 @@ struct ProModeView: View {
                         .font(.system(.body, design: .monospaced))
                         .multilineTextAlignment(.trailing)
                         .padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(Color(red: 1, green: 1, blue: 1, opacity: 0.05),
+                        .background(Color.primary.opacity(0.05),
                                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .frame(width: 110)
                 }
@@ -472,6 +473,12 @@ private struct QueueRow: View {
             if job.state == .finished || job.state == .failed || job.state == .cancelled {
                 engine.selectResult(job.id)
             }
+        }
+        .onTapGesture(count: 2) {
+            // Double-click plays the track from this point onward.
+            guard job.state == .finished, FileManager.default.fileExists(atPath: job.wavURL.path) else { return }
+            engine.selectResult(job.id)
+            PlaybackCoordinator.shared.play(job.wavURL)
         }
     }
 }

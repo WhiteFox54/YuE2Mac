@@ -72,6 +72,8 @@ struct SetupView: View {
             .padding()
         }
         .frame(minWidth: 560, minHeight: 600)
+        // Custom themes are designed dark; the system theme follows the user's appearance.
+        .preferredColorScheme(theme.colorScheme)
     }
 
     private var variantsPicker: some View {

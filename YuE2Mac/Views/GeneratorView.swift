@@ -62,6 +62,8 @@ struct GeneratorView: View {
             }
         }
         .frame(minWidth: 1000, minHeight: 680)
+        // Custom themes are designed dark; the system theme follows the user's appearance.
+        .preferredColorScheme(theme.colorScheme)
         .toolbar {
             // Mode switch stays leading; every other control trails.
             ToolbarItem(placement: .navigation) {
@@ -113,6 +115,7 @@ struct GeneratorView: View {
     private var themeMenu: some View {
         Menu {
             ForEach(AppTheme.allCases) { t in
+                if t == .system { Divider() }   // group the standard option apart from the studio looks
                 Button { settings.theme = t } label: {
                     if t == settings.theme { Label(t.displayName, systemImage: "checkmark") } else { Text(t.displayName) }
                 }

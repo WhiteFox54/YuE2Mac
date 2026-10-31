@@ -62,7 +62,7 @@ struct ABCEditorView: View {
                 }
             }
             .padding(10)
-            .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
 
             HStack(spacing: 10) {
                 Button {

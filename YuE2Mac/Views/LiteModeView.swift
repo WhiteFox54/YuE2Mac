@@ -150,12 +150,12 @@ struct LiteModeView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(
-                selected ? theme.accentColor.opacity(0.22) : Color.white.opacity(0.05),
+                selected ? theme.accentColor.opacity(0.22) : Color.primary.opacity(0.05),
                 in: RoundedRectangle(cornerRadius: 9, style: .continuous)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(selected ? theme.accentColor : Color.white.opacity(0.08), lineWidth: selected ? 1.5 : 1)
+                    .stroke(selected ? theme.accentColor : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1)
             )
         }
         .buttonStyle(.plain)
