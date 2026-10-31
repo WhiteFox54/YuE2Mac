@@ -6,7 +6,8 @@
 //  Queue semantics (analysis §2.A.2/6/7): one job runs at a time, queued jobs
 //  cancel instantly, a running job stops at the next step and is honestly
 //  labelled "Stopped" (never "Failed"). Every song lands in its own
-//  named Output folder with a song.json sidecar.
+//  named Output folder; the files inside (wav, json, abc…) are named after
+//  the song.
 //
 
 import Foundation
@@ -125,6 +126,7 @@ final class GenerationEngine {
         var job = Job(folder: newSongFolder(named: title))
         job.kind = .generate
         job.title = title
+        job.wavName = wavName(forFolder: job.folder, full: false)
         job.engineRoot = engineRoot
         job.modelDir = modelDir
         job.style = settings.effectiveStyle()
@@ -148,6 +150,7 @@ final class GenerationEngine {
         var job = Job(folder: newSongFolder(named: song.title))
         job.kind = .generate
         job.title = song.title
+        job.wavName = wavName(forFolder: job.folder, full: false)
         job.engineRoot = SettingsStore.shared.engineRoot ?? AppPaths.scriptsDir.path
         job.modelDir = meta.model.isEmpty ? (SettingsStore.shared.modelDir ?? "") : meta.model
         job.style = meta.style
@@ -180,7 +183,7 @@ final class GenerationEngine {
         var job = Job(folder: folder)
         job.kind = .finish
         job.title = song.title
-        job.wavName = "song-full.wav"
+        job.wavName = wavName(forFolder: folder, full: true)
         job.engineRoot = SettingsStore.shared.engineRoot ?? AppPaths.scriptsDir.path
         job.modelDir = SettingsStore.shared.modelDir ?? ""
         job.steps = 32
@@ -201,6 +204,7 @@ final class GenerationEngine {
         var job = Job(folder: newSongFolder(named: song.title))
         job.kind = .rerender
         job.title = song.title
+        job.wavName = wavName(forFolder: job.folder, full: false)
         job.engineRoot = SettingsStore.shared.engineRoot ?? AppPaths.scriptsDir.path
         job.modelDir = meta.model.isEmpty ? (SettingsStore.shared.modelDir ?? "") : meta.model
         job.style = meta.style
@@ -503,15 +507,17 @@ final class GenerationEngine {
     /// was the only thing in it. Finish jobs never touch the draft's files.
     private func cleanupPartials(of job: Job) {
         let fm = FileManager.default
-        let stem = job.wavName == "song-full.wav" ? "song-full" : "song"
+        // The stem is the wav filename without ".wav" (e.g. "pop" or "pop-full").
+        let stem = (job.wavName as NSString).deletingPathExtension
         let folder = job.folder
         for ext in ["wav", "latents.npy", "tokens.json", "abc"] {
             let url = folder.appendingPathComponent("\(stem).\(ext)")
             if fm.fileExists(atPath: url.path) { try? fm.removeItem(at: url) }
         }
         // Remove the folder itself if nothing remains but the (now stale) sidecar.
+        let baseStem = folder.lastPathComponent
         if let contents = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil),
-           contents.allSatisfy({ $0.lastPathComponent == SongLibrary.songJSONName }) {
+           contents.allSatisfy({ $0.lastPathComponent == "\(baseStem).json" || $0.lastPathComponent == SongLibrary.songJSONName }) {
             try? fm.removeItem(at: folder)
         }
     }
@@ -533,6 +539,13 @@ final class GenerationEngine {
             .prefix(3)
             .joined(separator: " ") ?? ""
         return words.isEmpty ? "Song" : words
+    }
+
+    /// The audio filename for a job, named after the song (its folder).
+    /// Full-quality renders get a "-full" suffix so draft and full coexist.
+    private func wavName(forFolder folder: URL, full: Bool) -> String {
+        let stem = folder.lastPathComponent
+        return full ? "\(stem)-full.wav" : "\(stem).wav"
     }
 
     private func newSongFolder(named raw: String) -> URL {
