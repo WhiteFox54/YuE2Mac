@@ -1,15 +1,17 @@
 //
 //  SongLibrary.swift — every song lives in its own named folder under
-//  Output/ with a song.json sidecar (style, lyrics, seed, mode, timings…).
-//  The library scans those folders plus legacy loose .wav files, and provides
-//  playback targets, M4A export via afconvert, and delete. (Analysis §2.A.4.)
+//  Output/. Files inside are named after the song (e.g. "pop.wav",
+//  "pop.json"); legacy songs used fixed names ("song.wav", "song.json") and
+//  are still found via fallback. The sidecar holds style, lyrics, seed,
+//  mode, timings… The library scans those folders plus legacy loose .wav
+//  files and provides playback targets, M4A export via afconvert, delete.
 //
 
 import Foundation
 import AppKit
 import Combine
 
-/// Metadata written next to each generated song (song.json).
+/// Metadata written next to each generated song (<name>.json; legacy: song.json).
 struct SongMetadata: Codable {
     var title: String
     var createdAt: Date
@@ -48,13 +50,23 @@ struct LibrarySong: Identifiable {
 
     var fullWav: URL? {
         guard let folder else { return nil }
-        let url = folder.appendingPathComponent("song-full.wav")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        // New style names the render after the song; legacy used "song-full.wav".
+        return findFile(in: folder, ["\(folder.lastPathComponent)-full.wav", "song-full.wav"])
     }
     var draftWav: URL? {
         guard let folder else { return nil }
-        let url = folder.appendingPathComponent("song.wav")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        // New style names the render after the song; legacy used "song.wav".
+        return findFile(in: folder, ["\(folder.lastPathComponent).wav", "song.wav"])
+    }
+
+    /// The first existing file in `folder` among the candidate names, else nil.
+    private func findFile(in folder: URL, _ candidates: [String]) -> URL? {
+        let fm = FileManager.default
+        for name in candidates {
+            let url = folder.appendingPathComponent(name)
+            if fm.fileExists(atPath: url.path) { return url }
+        }
+        return nil
     }
     var legacyWav: URL? {
         guard legacy else { return nil }
@@ -67,14 +79,14 @@ struct LibrarySong: Identifiable {
     var isFinished: Bool { metadata?.fullSteps != nil }
     var hasTokens: Bool {
         guard let folder else { return false }
-        return FileManager.default.fileExists(
-            atPath: folder.appendingPathComponent("song.tokens.json").path)
+        // New style names the project after the song; legacy used "song.tokens.json".
+        return findFile(in: folder, ["\(folder.lastPathComponent).tokens.json", "song.tokens.json"]) != nil
     }
     var hasABC: Bool { abcURL != nil }
     var abcURL: URL? {
         guard let folder else { return nil }
-        let url = folder.appendingPathComponent("song.abc")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        // New style names the score after the song; legacy used "song.abc".
+        return findFile(in: folder, ["\(folder.lastPathComponent).abc", "song.abc"])
     }
     /// A draft saved with semantic tokens can be finished at full quality.
     var canFinish: Bool { isDraft && hasTokens }
@@ -146,6 +158,15 @@ final class PlaylistManager: ObservableObject {
         currentIndex = -1
     }
 
+    /// Make the track at `index` the current one and return its URL, so the
+    /// caller can hand it to the PlaybackCoordinator. Returns nil if the index
+    /// is out of range.
+    func play(from index: Int) -> URL? {
+        guard index >= 0, index < tracks.count else { return nil }
+        currentIndex = index
+        return tracks[index]
+    }
+
     /// Play the next track in the playlist after the current one finishes.
     func playNext() -> URL? {
         guard currentIndex < tracks.count - 1 else { return nil }
@@ -161,6 +182,8 @@ final class PlaylistManager: ObservableObject {
 }
 
 enum SongLibrary {
+    /// Legacy sidecar filename. New songs name their sidecar after the song
+    /// ("<name>.json"); this is kept only as a fallback for old songs.
     static let songJSONName = "song.json"
 
     // MARK: Scanning
@@ -195,9 +218,18 @@ enum SongLibrary {
 
     static func song(inFolder folder: URL) -> LibrarySong? {
         let fm = FileManager.default
-        let wav = folder.appendingPathComponent("song.wav")
-        let full = folder.appendingPathComponent("song-full.wav")
-        guard fm.fileExists(atPath: wav.path) || fm.fileExists(atPath: full.path) else { return nil }
+        // A song folder holds a wav named after the song (new) or "song.wav" (legacy).
+        let candidates = [
+            "\(folder.lastPathComponent).wav",
+            "\(folder.lastPathComponent)-full.wav",
+            "song.wav",
+            "song-full.wav"
+        ]
+        let wav = candidates.lazy.compactMap { name -> URL? in
+            let url = folder.appendingPathComponent(name)
+            return fm.fileExists(atPath: url.path) ? url : nil
+        }.first
+        guard let wav else { return nil }
 
         let metadata = loadMetadata(folder: folder)
         // Folder names are now just the song title (no timestamp prefix).
@@ -220,11 +252,16 @@ enum SongLibrary {
     }
 
     static func loadMetadata(folder: URL) -> SongMetadata? {
-        let url = folder.appendingPathComponent(songJSONName)
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try? decoder.decode(SongMetadata.self, from: data)
+        // New style names the sidecar after the song; legacy used "song.json".
+        let candidates = ["\(folder.lastPathComponent).json", songJSONName]
+        for name in candidates {
+            let url = folder.appendingPathComponent(name)
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            if let meta = try? decoder.decode(SongMetadata.self, from: data) { return meta }
+        }
+        return nil
     }
 
     static func writeMetadata(_ metadata: SongMetadata, folder: URL) {
@@ -232,7 +269,16 @@ enum SongLibrary {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? encoder.encode(metadata) {
-            try? data.write(to: folder.appendingPathComponent(songJSONName), options: .atomic)
+            // Name the sidecar after the song (new style).
+            let newName = "\(folder.lastPathComponent).json"
+            try? data.write(to: folder.appendingPathComponent(newName), options: .atomic)
+            // Migrate a stale legacy sidecar so the folder keeps exactly one.
+            if newName != songJSONName {
+                let legacy = folder.appendingPathComponent(songJSONName)
+                if FileManager.default.fileExists(atPath: legacy.path) {
+                    try? FileManager.default.removeItem(at: legacy)
+                }
+            }
         }
     }
 

@@ -110,9 +110,12 @@ struct LibraryView: View {
                                        },
                                        onAddToPlaylist: {
                                            playlist.add(song.wav)
-                                           // If nothing is playing, start this track.
+                                           // If the playlist isn't driving playback, start this
+                                           // track from its spot in the queue.
                                            if playlist.currentIndex == -1 {
-                                               playlist.currentIndex = 0
+                                               if let idx = playlist.tracks.firstIndex(of: song.wav) {
+                                                   playlist.currentIndex = idx
+                                               }
                                                PlaybackCoordinator.shared.play(song.wav)
                                            }
                                        })
@@ -137,7 +140,7 @@ struct LibraryView: View {
                     }
 
                     if playlist.tracks.isEmpty {
-                        Text("Drag songs here to build your playlist.")
+                        Text("Add songs with the + button on each row.")
                             .font(.system(.caption))
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -150,6 +153,13 @@ struct LibraryView: View {
                                         index: index,
                                         url: url,
                                         isCurrent: playlist.currentIndex == index,
+                                        count: playlist.tracks.count,
+                                        onPlay: {
+                                            // Double-click: start here and continue sequentially.
+                                            if let target = playlist.play(from: index) {
+                                                PlaybackCoordinator.shared.play(target)
+                                            }
+                                        },
                                         onRemove: { playlist.remove(url) },
                                         onMoveUp: {
                                             if index > 0 {
@@ -165,17 +175,23 @@ struct LibraryView: View {
                                 }
                             }
                         }
+
+                        PlaylistControls()
                     }
                 }
-                .frame(maxHeight: 200)
+                .frame(maxHeight: 260)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             refresh()
-            // Set up auto-play next track when current one finishes.
+            // Set up auto-play next track when current one finishes. Only
+            // advance if the finished track is actually the playlist's current
+            // one — a song played from elsewhere (e.g. the result panel) must
+            // not drag the queue along.
             PlaybackCoordinator.shared.onTrackFinished = { finishedUrl in
+                guard let current = playlist.currentTrack, current == finishedUrl else { return }
                 if let nextUrl = playlist.playNext() {
                     PlaybackCoordinator.shared.play(nextUrl)
                 }
@@ -360,13 +376,17 @@ private struct PlaylistRow: View {
     let index: Int
     let url: URL
     let isCurrent: Bool
+    /// Total number of tracks (drives the move-down button's enabled state).
+    let count: Int
+    var onPlay: () -> Void
     var onRemove: () -> Void
     var onMoveUp: () -> Void
     var onMoveDown: () -> Void
 
     private var title: String {
-        // Try to load metadata for the song name.
-        if let meta = SongLibrary.loadMetadata(folder: url) {
+        // The playlist stores wav file URLs; the metadata sidecar lives in the
+        // song's folder, so resolve it from the containing directory.
+        if let meta = SongLibrary.loadMetadata(folder: url.deletingLastPathComponent()) {
             return meta.title
         }
         return url.lastPathComponent
@@ -402,7 +422,7 @@ private struct PlaylistRow: View {
                     .font(.system(size: 10))
             }
             .buttonStyle(.plain)
-            .disabled(true) // Will be enabled when we know the count
+            .disabled(index >= count - 1)
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
@@ -413,5 +433,75 @@ private struct PlaylistRow: View {
         }
         .padding(6)
         .background(isCurrent ? Color.accentColor.opacity(0.1) : Color.clear)
+        .contentShape(Rectangle())
+        // Double-click starts playback from this track (and continues on).
+        .onTapGesture(count: 2, perform: onPlay)
+    }
+}
+
+// MARK: - Playlist Controls
+
+/// Transport controls for the playlist queue (previous / play-pause / next).
+/// Only active while the shared player actually has the playlist's current
+/// track loaded — a song played from elsewhere (e.g. the result panel) leaves
+/// them disabled rather than hijacking playback.
+private struct PlaylistControls: View {
+    @ObservedObject var playlist = PlaylistManager.shared
+    @ObservedObject var coordinator = PlaybackCoordinator.shared
+
+    /// True when the shared player has the playlist's current track loaded.
+    private var controlsPlaylist: Bool {
+        guard let track = playlist.currentTrack else { return false }
+        return coordinator.url == track
+    }
+
+    private var isPlaying: Bool { controlsPlaylist && coordinator.isPlaying }
+
+    var body: some View {
+        HStack(spacing: 20) {
+            Button(action: playPrevious) {
+                Image(systemName: "backward.fill")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .disabled(!controlsPlaylist || playlist.currentIndex <= 0)
+            .help("Previous track")
+
+            Button(action: togglePlayPause) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!controlsPlaylist)
+            .help(isPlaying ? "Pause" : "Play")
+
+            Button(action: playNext) {
+                Image(systemName: "forward.fill")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .disabled(!controlsPlaylist || playlist.currentIndex >= playlist.tracks.count - 1)
+            .help("Next track")
+        }
+    }
+
+    private func togglePlayPause() {
+        guard let track = playlist.currentTrack, coordinator.url == track else { return }
+        if coordinator.isPlaying {
+            coordinator.pause()
+        } else {
+            coordinator.play(track)
+        }
+    }
+
+    private func playPrevious() {
+        guard let url = playlist.play(from: playlist.currentIndex - 1) else { return }
+        coordinator.play(url)
+    }
+
+    private func playNext() {
+        guard let url = playlist.play(from: playlist.currentIndex + 1) else { return }
+        coordinator.play(url)
     }
 }
